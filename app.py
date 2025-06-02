@@ -276,48 +276,48 @@ if uploaded_files:
         }};
     </script>
 """, height=80)
-                # ✅ 台語語音合成（使用 Hugging Face API）
-                import uuid
+# ✅ 台語語音合成（使用 Hugging Face API）
+def generate_taiwanese_tts(text):
+    url = "https://api-inference.huggingface.co/models/smartlabs/tts-taiwanese-hf"
+    headers = {
+        "Authorization": f"Bearer {st.secrets['HF_API_TOKEN']}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "inputs": text,
+        "options": {"use_cache": False},
+    }
 
-                def generate_taiwanese_tts(text):
-                    url = "https://huggingface.co/smartlabs/tts-taiwanese-hf/resolve/main/output.wav"
-                    headers = {"Accept": "application/json"}
-                    payload = {
-                    "inputs": text,
-                    "options": {"use_cache": False},
-                     }
+    response = requests.post(url, headers=headers, json=payload, stream=True)
 
-                # 使用 Streaming API
-                response = requests.post(
-                "https://api-inference.huggingface.co/models/smartlabs/tts-taiwanese-hf",
-                headers={"Authorization": f"Bearer {st.secrets['HF_API_TOKEN']}"},
-                json=payload,
-                stream=True
-    )
-
-                if response.status_code == 200:
-                    temp_tai_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-                    with open(temp_tai_audio.name, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
+    if response.status_code == 200:
+        temp_tai_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+        with open(temp_tai_audio.name, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
-                    return temp_tai_audio.name
-                else:
-                    st.warning("⚠️ 台語語音產生失敗，請稍後再試。")
-                    return None
-        
+        return temp_tai_audio.name
+    else:
+        st.warning("⚠️ 台語語音產生失敗，請稍後再試。")
+        return None
 
-                # ✅ 加入台語語音播放
-                st.subheader("🗣️ 台語語音播放（實驗功能）")
-                tai_audio_path = generate_taiwanese_tts(plain_summary)
+# 👉 清除 Markdown 語法
+import re
+def remove_markdown(text):
+    return re.sub(r'[*_`>#\-]', '', text)
 
-                if tai_audio_path:
-                    with open(tai_audio_path, "rb") as f:
-                    audio_bytes = f.read()
-                    audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
-                    components.html(f"""
-         <audio id="tai-audio" controls>
-                <source src="data:audio/wav;base64,{audio_base64}" type="audio/wav">
+# ✅ 台語語音播放
+st.subheader("🗣️ 台語語音播放（實驗功能）")
+plain_summary = remove_markdown(summary)
+tai_audio_path = generate_taiwanese_tts(plain_summary)
+
+if tai_audio_path:
+    with open(tai_audio_path, "rb") as f:
+        tai_bytes = f.read()
+        tai_base64 = base64.b64encode(tai_bytes).decode("utf-8")
+        components.html(f"""
+            <audio id="tai-audio" controls>
+                <source src="data:audio/wav;base64,{tai_base64}" type="audio/wav">
                 您的瀏覽器不支援台語語音播放，請改用其他裝置。
             </audio>
             <script>
@@ -327,6 +327,7 @@ if uploaded_files:
                 }};
             </script>
         """, height=80)
+
 
                 st.info("🤖 本解讀為 AI 推論結果，若有疑問請諮詢專業人員。")
                 # 🔧 定義清理 markdown 的函式（可以放在檔案開頭）
