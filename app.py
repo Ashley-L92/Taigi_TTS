@@ -96,14 +96,14 @@ def generate_summary_image(text_to_render, output_path="summary_card.png"):
 
 def generate_taiwanese_tts(text_to_synthesize, hf_api_token):
     """使用 Hugging Face API 生成台語語音。"""
-    url = "https://api-inference.huggingface.co/models/smartlabs/tts-taiwanese-hf"
+    url = "https://api-inference.huggingface.co/models/smartlabs/tts-taiwanese-hf" # 這個模型是個不錯的選擇
     headers = {
         "Authorization": f"Bearer {hf_api_token}",
         "Content-Type": "application/json"
     }
     payload = {
         "inputs": text_to_synthesize,
-        "options": {"use_cache": False},
+        "options": {"use_cache": False}, # 避免快取舊的結果
     }
 
     try:
@@ -370,6 +370,7 @@ if uploaded_files:
                 # 台語語音播放
                 st.subheader("🗣️ 台語語音播放（實驗功能）")
                 plain_summary_for_taiwanese = remove_markdown(summary)
+                # 這裡呼叫 generate_taiwanese_tts 函數，並傳入 HF_API_TOKEN
                 tai_audio_path = generate_taiwanese_tts(plain_summary_for_taiwanese, HF_API_TOKEN)
 
                 if tai_audio_path:
