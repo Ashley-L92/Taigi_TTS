@@ -2,8 +2,9 @@ import streamlit as st
 import requests
 import base64
 from gtts import gTTS
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont # 確保導入 ImageDraw 和 ImageFont
 import tempfile
+import re # 確保導入 re 模組
 
 # 📦 成分小資料庫（可以之後換成 csv）
 ingredient_info = {
@@ -26,6 +27,102 @@ ingredient_info = {
     # 你可以繼續加～
 }
 
+# 🔧 輔助函數定義 (移到程式碼頂層)
+def remove_markdown(text):
+    """移除文字中的 Markdown 符號。"""
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text) # 移除粗體 **
+    text = re.sub(r"\*(.*?)\*", r"\1", text)     # 移除斜體 *
+    text = re.sub(r"__(.*?)__", r"\1", text)     # 移除底線 __
+    text = re.sub(r"`(.*?)`", r"\1", text)       # 移除程式碼塊 `
+    text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE) # 移除標題 #
+    text = re.sub(r"^- ", "", text, flags=re.MULTILINE)   # 移除列表 -
+    return text.strip()
+
+def highlight_ingredients(text_to_highlight, db):
+    """將文本中包含在成分資料庫的成分名稱高亮顯示。"""
+    for ing in db:
+        if ing in text_to_highlight:
+            # 使用更精確的正則表達式來避免部分匹配，例如「胺」匹配到「亞硝酸鈉」中的「胺」
+            # 這裡簡單替換，如果需要更嚴謹，可能需要分詞或使用更複雜的匹配邏輯
+            replacement = f"<span style='color:#0066cc; font-weight:bold;'>{ing}</span>"
+            text_to_highlight = text_to_highlight.replace(ing, replacement)
+    return text_to_highlight
+
+def generate_summary_image(text_to_render, output_path="summary_card.png"):
+    """
+    根據提供的文本生成一張圖片。
+    需要確保運行環境有支援中文的字型檔案。
+    """
+    width, height = 800, 600
+    background_color = (255, 255, 255)
+    text_color = (30, 30, 30)
+
+    img = Image.new("RGB", (width, height), color=background_color)
+    draw = ImageDraw.Draw(img)
+
+    try:
+        # 嘗試載入常見的中文字型
+        # Windows: "msjh.ttf" (微軟正黑體), "simhei.ttf" (黑體)
+        # macOS: "Arial Unicode.ttf", "PingFang.ttc" (蘋方)
+        # Linux: "wqy-microhei.ttc" (文泉驛微米黑), "NotoSansCJK-Regular.ttc"
+        # 請根據您的運行環境選擇或提供正確的路徑
+        font = ImageFont.truetype("msjh.ttf", size=28) # 優先嘗試微軟正黑體
+    except IOError:
+        try:
+            font = ImageFont.truetype("arial.ttf", size=28) # 其次嘗試 Arial
+        except IOError:
+            font = ImageFont.load_default() # 如果都失敗，使用預設字型
+            st.warning("⚠️ 未找到支援中文字型，生成的圖片可能無法正確顯示中文。")
+
+    lines = []
+    line = ""
+    # 按字元分割來處理中文換行
+    for char in text_to_render:
+        # draw.textlength 估算文本寬度
+        if draw.textlength(line + char, font=font) <= width - 80:
+            line += char
+        else:
+            lines.append(line.strip())
+            line = char
+    lines.append(line.strip()) # 加入最後一行
+
+    y = 50
+    for line_content in lines:
+        draw.text((40, y), line_content, font=font, fill=text_color)
+        y += font.getbbox(line_content)[3] - font.getbbox(line_content)[1] + 10 # 計算行高加上間距
+
+    img.save(output_path)
+    return output_path
+
+def generate_taiwanese_tts(text_to_synthesize, hf_api_token):
+    """使用 Hugging Face API 生成台語語音。"""
+    url = "https://api-inference.huggingface.co/models/smartlabs/tts-taiwanese-hf"
+    headers = {
+        "Authorization": f"Bearer {hf_api_token}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "inputs": text_to_synthesize,
+        "options": {"use_cache": False},
+    }
+
+    try:
+        response_tai = requests.post(url, headers=headers, json=payload, stream=True)
+
+        if response_tai.status_code == 200:
+            temp_tai_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            with open(temp_tai_audio.name, 'wb') as f:
+                for chunk in response_tai.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            return temp_tai_audio.name
+        else:
+            st.warning(f"⚠️ 台語語音產生失敗，API 回傳錯誤碼：{response_tai.status_code} ({response_tai.text})。請稍後再試。")
+            return None
+    except requests.exceptions.RequestException as e:
+        st.warning(f"⚠️ 台語語音產生失敗，網路請求錯誤：{e}")
+        return None
+
 # ✅ 強制放最前面
 st.set_page_config(page_title="長者友善標籤小幫手", layout="centered")
 
@@ -43,14 +140,26 @@ if st.button("🔄 重新開始"):
     st.rerun()
 
 MAX_FILE_SIZE = 5 * 1024 * 1024
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+
+# 從 Streamlit secrets 獲取 API 金鑰
+try:
+    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+except KeyError:
+    st.error("錯誤：請在 `.streamlit/secrets.toml` 中設定 `GEMINI_API_KEY`。")
+    st.stop()
+
+try:
+    HF_API_TOKEN = st.secrets["HF_API_TOKEN"]
+except KeyError:
+    st.error("錯誤：請在 `.streamlit/secrets.toml` 中設定 `HF_API_TOKEN`。")
+    st.stop()
+
 
 st.title("👵 長者友善標籤小幫手")
 st.markdown("""
 **上傳商品標籤圖片，我們會幫你解讀成分內容，並提供語音播放。**
 
-⚠️ **提醒**  
-由於目前使用的 API 額度較低，若同時有多人使用或使用過於頻繁，可能會遇到額度限制（Error 429）。如果出現錯誤，請稍後再試～
+⚠️ **提醒** 由於目前使用的 API 額度較低，若同時有多人使用或使用過於頻繁，可能會遇到額度限制（Error 429）。如果出現錯誤，請稍後再試～
 """)
 
 st.markdown("""
@@ -69,9 +178,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-
-
-# 加上框起來的文字
 st.markdown("""
 <div style="background-color:#E94707; color:white; padding:10px; border-radius:5px; text-align:center;">
 <b>步驟1：請選擇介面整體字體大小和模式</b>
@@ -96,11 +202,10 @@ font_size_map = {
 }
 chosen_font_size = font_size_map[font_size_choice]
 
-# 💡 使用全域 CSS 調整整個 app 的字體大小
 st.markdown(
     f"""
     <style>
-    html, body, [class*="css"]  {{
+    html, body, [class*="css"] {{
         font-size: {chosen_font_size} !important;
         line-height: 1.6;
     }}
@@ -109,7 +214,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 使用者選項
 st.markdown("""
 <div style="padding:0 px; border-radius:0 px">
 <b>請選擇顯示模式</b>
@@ -127,8 +231,6 @@ speech_speed = st.radio(" ", ["正常語速", "慢速播放"],index=1,
     horizontal=True)
 
 
-
-# 上傳圖片（多圖支援）
 st.markdown("""
 <div style="background-color:#FFB405; color:white;padding:10px; border-radius:5px;text-align:center;">
 <b>步驟2：請上傳商品標籤圖片</b>
@@ -157,7 +259,7 @@ if uploaded_files:
 
         try:
             image = Image.open(uploaded_file).convert("RGB")
-            image.thumbnail((1024, 1024))
+            image.thumbnail((1024, 1024)) # 調整縮圖大小
         except Exception as e:
             st.error(f"❌ 圖片處理失敗：{e}")
             continue
@@ -174,18 +276,18 @@ if uploaded_files:
 
 1. 判斷這是食品或藥品。
 2. 清楚列出以下項目：
-   - 類型（食品 / 藥品）
-   - 中文名稱（如果有）
-   - 主要成分：每項成分的功能（例如防腐、調味、營養）以及可能注意事項（例如過敏原、對特定族群不建議）
+    - 類型（食品 / 藥品）
+    - 中文名稱（如果有）
+    - 主要成分：每項成分的功能（例如防腐、調味、營養）以及可能注意事項（例如過敏原、對特定族群不建議）
 3. 使用不超過國中程度的中文描述，適合長者與一般民眾閱讀
 4. **在最後加入一段「總結說明」**，用簡短白話總結這項產品的核心資訊（例如用途、成分關鍵點、誰應避免）
 
 只輸出清楚段落文字，無需任何多餘說明。
         """
 
-        url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
-        params = {"key": GEMINI_API_KEY}
-        payload = {
+        gemini_url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
+        gemini_params = {"key": GEMINI_API_KEY}
+        gemini_payload = {
             "contents": [
                 {
                     "parts": [
@@ -202,7 +304,7 @@ if uploaded_files:
         }
 
         with st.spinner("AI 正在解讀標籤中..."):
-            response = requests.post(url, params=params, json=payload)
+            response = requests.post(gemini_url, params=gemini_params, json=gemini_payload)
 
         if response.status_code == 200:
             try:
@@ -212,28 +314,18 @@ if uploaded_files:
                     st.warning("⚠️ 此圖片未產出有效文字，可能為圖像不清晰或無內容。")
                     continue
 
-                import re
                 summary_match = re.search(r"總結說明[:：]?\s*(.*)", text, re.DOTALL)
                 if summary_match:
-                   summary = summary_match.group(1).strip()
+                    summary = summary_match.group(1).strip()
                 else:
-                   summary = "這是一項含有多種成分的產品，請依照個人狀況酌量使用。"
+                    summary = "這是一項含有多種成分的產品，請依照個人狀況酌量使用。"
 
+                # 確保 summary 不為空，以防解析失敗
                 if not summary:
                     summary = "這是一項含有多種成分的產品，請依照個人狀況酌量使用。"
-                # ✨ 將 summary 中出現的成分轉換成可點擊的 expander
-                def highlight_ingredients(text, db):
-                    for ing in db:
-                        if ing in text:
-                            replacement = f"<span style='color:#0066cc; font-weight:bold;'>{ing}</span>"
-                            text = text.replace(ing, replacement)
-                    return text
 
                 highlighted_summary = highlight_ingredients(summary, ingredient_info)
-               
 
-                
-                # 顯示內容（根據模式）
                 st.subheader("📝 成分說明")
                 if mode == "進階模式（完整解讀）":
                     st.markdown(
@@ -251,14 +343,12 @@ if uploaded_files:
                             st.markdown(f"**用途：** {info['用途']}")
                             st.markdown(f"**風險：** {info['風險']}")
 
-                # 語音播放
+                # 語音播放 (中文)
                 tts = gTTS(summary, lang='zh-TW', slow=(speech_speed == "慢速播放"))
                 temp_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
                 tts.save(temp_audio.name)
 
                 st.subheader("🔈 總結語音播放（若無法播放將提示）")
-                
-
                 import streamlit.components.v1 as components
 
                 audio_bytes = open(temp_audio.name, 'rb').read()
@@ -272,148 +362,71 @@ if uploaded_files:
     <script>
         const audio = document.getElementById("summary-audio");
         audio.onerror = function() {{
-            alert("⚠️ 無法播放語音：您的裝置或瀏覽器可能不支援 MP3 播放。");
+            console.error("無法播放語音：您的裝置或瀏覽器可能不支援 MP3 播放。");
         }};
     </script>
 """, height=80)
-                # ✅ 台語語音合成（使用 Hugging Face API）
-                def generate_taiwanese_tts(text):
-                    url = "https://api-inference.huggingface.co/models/smartlabs/tts-taiwanese-hf"
-                    headers = {
-                        "Authorization": f"Bearer {st.secrets['HF_API_TOKEN']}",
-                        "Content-Type": "application/json"
-                    }
-                    payload = {
-                        "inputs": text,
-                        "options": {"use_cache": False},
-                    }
 
-                    response = requests.post(url, headers=headers, json=payload, stream=True)
+                # 台語語音播放
+                st.subheader("🗣️ 台語語音播放（實驗功能）")
+                plain_summary_for_taiwanese = remove_markdown(summary)
+                tai_audio_path = generate_taiwanese_tts(plain_summary_for_taiwanese, HF_API_TOKEN)
 
-                    if response.status_code == 200:
-                        temp_tai_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-                        with open(temp_tai_audio.name, 'wb') as f:
-                            for chunk in response.iter_content(chunk_size=8192):
-                                if chunk:
-                                    f.write(chunk)
-                        return temp_tai_audio.name
-                    else:
-                        st.warning("⚠️ 台語語音產生失敗，請稍後再試。")
-                        return None
-
-            # 👉 清除 Markdown 語法
-            import re
-            def remove_markdown(text):
-            return re.sub(r'[*_`>#\-]', '', text)
-
-            # ✅ 台語語音播放
-            st.subheader("🗣️ 台語語音播放（實驗功能）")
-            plain_summary = remove_markdown(summary)
-            tai_audio_path = generate_taiwanese_tts(plain_summary)
-
-            if tai_audio_path:
-                with open(tai_audio_path, "rb") as f:
-                    tai_bytes = f.read()
-                    tai_base64 = base64.b64encode(tai_bytes).decode("utf-8")
-                    components.html(f"""
-                    <audio id="tai-audio" controls>
-                    <source src="data:audio/wav;base64,{tai_base64}" type="audio/wav">
-                    您的瀏覽器不支援台語語音播放，請改用其他裝置。
-                </audio>
-                <script>
-                        const audio = document.getElementById("tai-audio");
+                if tai_audio_path:
+                    with open(tai_audio_path, "rb") as f:
+                        tai_bytes = f.read()
+                        tai_base64 = base64.b64encode(tai_bytes).decode("utf-8")
+                        components.html(f"""
+                        <audio id="tai-audio" controls>
+                        <source src="data:audio/wav;base64,{tai_base64}" type="audio/wav">
+                        您的瀏覽器不支援台語語音播放，請改用其他裝置。
+                        </audio>
+                        <script>
+                            const audio = document.getElementById("tai-audio");
                             audio.onerror = function() {{
-                               alert("⚠️ 無法播放台語語音：請確認裝置支援 WAV 格式。");
-                                    }};
-                 </script>
-        """, height=80)
-
+                                console.error("無法播放台語語音：請確認裝置支援 WAV 格式。");
+                            }};
+                        </script>
+                    """, height=80)
+                else:
+                    st.info("台語語音未能生成。")
 
 
                 st.info("🤖 本解讀為 AI 推論結果，若有疑問請諮詢專業人員。")
-                # 🔧 定義清理 markdown 的函式（可以放在檔案開頭）
-                import re
-
-                def remove_markdown(text):
-                    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
-                    text = re.sub(r"\*(.*?)\*", r"\1", text)
-                    text = re.sub(r"__(.*?)__", r"\1", text)
-                    text = re.sub(r"`(.*?)`", r"\1", text)
-                    text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
-                    text = re.sub(r"^- ", "", text, flags=re.MULTILINE)
-                    return text.strip()
 
                 # 📝 建立純文字版 summary
-                plain_summary = remove_markdown(summary)
+                plain_summary_for_copy = remove_markdown(summary)
 
                 # 📋 一鍵複製按鈕（顯示在頁面上）
-                import streamlit.components.v1 as components
-
                 st.markdown("### 📋 一鍵複製總結內容")
                 components.html(f"""
-                    <textarea id="summary-text" style="width:100%; height:150px;">{plain_summary}</textarea>
+                    <textarea id="summary-text" style="width:100%; height:150px;">{plain_summary_for_copy}</textarea>
                     <button onclick="copyToClipboard()" style="margin-top:10px;">點我複製到剪貼簿</button>
                     <script>
                     function copyToClipboard() {{
                         var copyText = document.getElementById("summary-text");
                         copyText.select();
                         document.execCommand("copy");
-                        alert("✅ 已複製到剪貼簿！");
+                        console.log("✅ 已複製到剪貼簿！");
                     }}
                     </script>
                 """, height=250)
 
+                # 📸 生成並顯示圖片卡
+                image_output_path = generate_summary_image(plain_summary_for_copy)
+                st.image(image_output_path, caption="📸 分享用成分說明卡", use_column_width=True)
 
-                from PIL import Image, ImageDraw, ImageFont
-
-                def generate_summary_image(text, output_path="summary_card.png"):
-                    # 設定圖片大小與樣式
-                    width, height = 800, 600
-                    background_color = (255, 255, 255)
-                    text_color = (30, 30, 30)
-
-                    # 建立空白圖片
-                    img = Image.new("RGB", (width, height), color=background_color)
-                    draw = ImageDraw.Draw(img)
-
-                    # 載入字型（mac 可以改成 Apple 系統內字型）
-                    try:
-                        font = ImageFont.truetype("arial.ttf", size=28)
-                    except:
-                        font = ImageFont.load_default()
-
-                    # 自動換行處理
-                    lines = []
-                    line = ""
-                    for word in text.split():
-                        if draw.textlength(line + " " + word, font=font) <= width - 80:
-                            line += " " + word
-                        else:
-                            lines.append(line.strip())
-                            line = word
-                    lines.append(line.strip())
-
-                    # 印文字上圖
-                    y = 50
-                    for line in lines:
-                        draw.text((40, y), line, font=font, fill=text_color)
-                        y += 40
-
-                    img.save(output_path)
-                    return output_path
-                    image_path = generate_summary_image(plain_summary)
-                    st.image(image_path, caption="📸 分享用成分說明卡", use_column_width=True)
-
-                    with open(image_path, "rb") as file:
-                        st.download_button(
-                            label="⬇️ 下載圖片卡",
-                            data=file,
-                            file_name="summary_card.png",
-                            mime="image/png"
-                        )
+                with open(image_output_path, "rb") as file:
+                    st.download_button(
+                        label="⬇️ 下載圖片卡",
+                        data=file,
+                        file_name="summary_card.png",
+                        mime="image/png"
+                    )
 
             except Exception as e:
-                st.error(f"✅ 成功回傳但解析失敗：{e}")
+                st.error(f"✅ 成功回傳但解析或處理失敗：{e}")
+                st.exception(e) # 顯示完整的錯誤堆疊，有助於除錯
 
         else:
             if response.status_code == 429:
@@ -425,7 +438,6 @@ if uploaded_files:
             except Exception:
                 err = {"raw_text": response.text}
 
-            st.error(f"❌ 請求錯誤（{response.status_code}）")
             st.subheader("🔍 API 回傳錯誤 JSON")
             st.json(err)
             st.stop()
