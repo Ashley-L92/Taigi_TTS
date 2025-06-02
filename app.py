@@ -298,7 +298,7 @@ if uploaded_files:
                 if response.status_code == 200:
                     temp_tai_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
                     with open(temp_tai_audio.name, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
+                        for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
                     return temp_tai_audio.name
