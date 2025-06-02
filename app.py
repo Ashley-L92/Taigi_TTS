@@ -301,32 +301,32 @@ if uploaded_files:
                         st.warning("⚠️ 台語語音產生失敗，請稍後再試。")
                         return None
 
-                    # 👉 清除 Markdown 語法
-                    import re
-                    def remove_markdown(text):
-                        return re.sub(r'[*_`>#\-]', '', text)
+            # 👉 清除 Markdown 語法
+            import re
+            def remove_markdown(text):
+            return re.sub(r'[*_`>#\-]', '', text)
 
-                    # ✅ 台語語音播放
-                    st.subheader("🗣️ 台語語音播放（實驗功能）")
-                    plain_summary = remove_markdown(summary)
-                    tai_audio_path = generate_taiwanese_tts(plain_summary)
+            # ✅ 台語語音播放
+            st.subheader("🗣️ 台語語音播放（實驗功能）")
+            plain_summary = remove_markdown(summary)
+            tai_audio_path = generate_taiwanese_tts(plain_summary)
 
-                    if tai_audio_path:
-                        with open(tai_audio_path, "rb") as f:
-                            tai_bytes = f.read()
-                            tai_base64 = base64.b64encode(tai_bytes).decode("utf-8")
-                            components.html(f"""
-                                <audio id="tai-audio" controls>
-                                    <source src="data:audio/wav;base64,{tai_base64}" type="audio/wav">
-                                    您的瀏覽器不支援台語語音播放，請改用其他裝置。
-                                </audio>
-                                <script>
-                                    const audio = document.getElementById("tai-audio");
-                                    audio.onerror = function() {{
-                                        alert("⚠️ 無法播放台語語音：請確認裝置支援 WAV 格式。");
+            if tai_audio_path:
+                with open(tai_audio_path, "rb") as f:
+                    tai_bytes = f.read()
+                    tai_base64 = base64.b64encode(tai_bytes).decode("utf-8")
+                    components.html(f"""
+                    <audio id="tai-audio" controls>
+                    <source src="data:audio/wav;base64,{tai_base64}" type="audio/wav">
+                    您的瀏覽器不支援台語語音播放，請改用其他裝置。
+                </audio>
+                <script>
+                        const audio = document.getElementById("tai-audio");
+                            audio.onerror = function() {{
+                               alert("⚠️ 無法播放台語語音：請確認裝置支援 WAV 格式。");
                                     }};
-                                </script>
-                            """, height=80)
+                 </script>
+        """, height=80)
 
 
 
