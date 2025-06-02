@@ -279,13 +279,13 @@ if uploaded_files:
                 # ✅ 台語語音合成（使用 Hugging Face API）
                 import uuid
 
-        def generate_taiwanese_tts(text):
-                url = "https://huggingface.co/smartlabs/tts-taiwanese-hf/resolve/main/output.wav"
-                headers = {"Accept": "application/json"}
-                payload = {
-                "inputs": text,
-                "options": {"use_cache": False},
-    }
+                def generate_taiwanese_tts(text):
+                    url = "https://huggingface.co/smartlabs/tts-taiwanese-hf/resolve/main/output.wav"
+                    headers = {"Accept": "application/json"}
+                    payload = {
+                    "inputs": text,
+                    "options": {"use_cache": False},
+                     }
 
                 # 使用 Streaming API
                 response = requests.post(
