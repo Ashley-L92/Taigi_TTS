@@ -1,6 +1,13 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextGenerationPipeline
 import torch
 import accelerate
+import streamlit as st
+import requests
+import json
+import base64
+
+# 從 secrets 讀取 Hugging Face API 金鑰
+HUGGINGFACE_API_KEY = st.secrets["HUGGINGFACE_API_KEY"]
 
 def get_pipeline(path: str, tokenizer: AutoTokenizer, accelerator: accelerate.Accelerator) -> TextGenerationPipeline:
     model = AutoModelForCausalLM.from_pretrained(
