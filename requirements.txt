@@ -1,7 +1,8 @@
 streamlit
 transformers
 torch
-sentencepiece==0.1.99
+accelerate
+sentencepiece
 gtts
 Pillow
 requests
