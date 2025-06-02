@@ -4,6 +4,7 @@ import base64
 from gtts import gTTS
 from PIL import Image
 import tempfile
+import uuid
 # 📦 成分小資料庫（可以之後換成 csv）
 ingredient_info = {
     "苯甲酸鈉": {
