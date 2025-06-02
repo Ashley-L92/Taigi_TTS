@@ -2,6 +2,7 @@ streamlit
 transformers
 torch
 accelerate
+sentencepiece
 gtts
-Pillow         # 圖片處理用的 PIL
-requests       # 發送 API 請求
+Pillow
+requests
