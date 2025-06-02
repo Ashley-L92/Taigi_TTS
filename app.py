@@ -296,15 +296,15 @@ if uploaded_files:
     )
 
                 if response.status_code == 200:
-                temp_tai_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-                with open(temp_tai_audio.name, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
+                    temp_tai_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+                    with open(temp_tai_audio.name, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
-                f.write(chunk)
-                return temp_tai_audio.name
+                    f.write(chunk)
+                    return temp_tai_audio.name
                 else:
-                st.warning("⚠️ 台語語音產生失敗，請稍後再試。")
-                return None
+                    st.warning("⚠️ 台語語音產生失敗，請稍後再試。")
+                    return None
         
 
                 # ✅ 加入台語語音播放
@@ -312,10 +312,10 @@ if uploaded_files:
                 tai_audio_path = generate_taiwanese_tts(plain_summary)
 
                 if tai_audio_path:
-                with open(tai_audio_path, "rb") as f:
-                audio_bytes = f.read()
-                audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
-                components.html(f"""
+                    with open(tai_audio_path, "rb") as f:
+                    audio_bytes = f.read()
+                    audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+                    components.html(f"""
          <audio id="tai-audio" controls>
                 <source src="data:audio/wav;base64,{audio_base64}" type="audio/wav">
                 您的瀏覽器不支援台語語音播放，請改用其他裝置。
