@@ -305,7 +305,8 @@ def generate_taiwanese_tts(text):
     else:
         st.warning("⚠️ 台語語音產生失敗，請稍後再試。")
         return None
-
+        
+plain_summary = remove_markdown(summary)
 # ✅ 加入台語語音播放
 st.subheader("🗣️ 台語語音播放（實驗功能）")
 tai_audio_path = generate_taiwanese_tts(plain_summary)
