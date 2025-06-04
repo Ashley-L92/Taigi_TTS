@@ -391,7 +391,7 @@ if uploaded_files:
                     img.save(output_path)
                     return output_path
                 image_path = generate_summary_image(plain_summary)
-                st.image(image_path, caption="📸 分享用成分說明卡", use_column_width=True)
+                st.image(image_path, caption="📸 分享用成分說明卡", use_container_width=True)
                 with open(image_path, "rb") as file:
                     st.download_button(
                         label="⬇️ 下載圖片卡",
