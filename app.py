@@ -422,14 +422,6 @@ if uploaded_files:
                 image_path = generate_summary_image(plain_summary)
                 st.image(image_path, caption="📸 分享用成分說明卡", use_container_width=True)
 
-                with open(image_path, "rb") as file:
-                    st.download_button(
-                        label="⬇️ 下載圖片卡",
-                        data=file,
-                        file_name="summary_card.png",
-                        mime="image/png"
-                    )
-
             except Exception as e:
                 st.error(f"✅ 成功回傳但解析失敗：{e}")
 
