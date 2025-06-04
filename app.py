@@ -26,7 +26,7 @@ ingredient_info = {
     # 你可以繼續加～
 }
 
-st.set_page_config(page_title="長者友善標籤小幫手", layout="centered")
+st.set_page_config(page_title="銀齡標籤", layout="centered")
 
 if "reset" in st.query_params:
     st.markdown(
@@ -42,7 +42,7 @@ if st.button("🔄 重新開始"):
 MAX_FILE_SIZE = 5 * 1024 * 1024
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
-st.title("👵 長者友善標籤小幫手")
+st.title("👵 銀齡標籤")
 st.markdown("""
 **上傳商品標籤圖片，我們會幫你解讀成分內容，並提供語音播放。**
 
