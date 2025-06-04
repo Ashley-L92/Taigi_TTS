@@ -274,6 +274,11 @@ if uploaded_files:
                         st.warning("⚠️ 台語語音合成已達本次免費額度上限，請稍後再試或改用中文。")
                     else:
                         # ----------- 台語語音新版呼叫 -----------
+                        # 根據語速 radio 設定 TTS API 的 speed
+                        if speech_speed == "正常語速":
+                            tai_speed = 1.0
+                        else:
+                            tai_speed = 0.7
                         yating_url = "https://tts.api.yating.tw/v2/speeches/short"
                         yating_headers = {
                             "key": YATING_API_KEY,
@@ -281,7 +286,7 @@ if uploaded_files:
                         }
                         yating_data = {
                             "input": {"text": summary, "type": "text"},
-                            "voice": {"model": "tai_female_1", "speed": 1.0, "pitch": 1.0, "energy": 1.0},
+                            "voice": {"model": "tai_female_1", "speed": tai_speed, "pitch": 1.0, "energy": 1.0},
                             "audioConfig": {"encoding": "LINEAR16", "sampleRate": "16K"}
                         }
                         tts_resp = requests.post(yating_url, headers=yating_headers, json=yating_data, verify=False)
