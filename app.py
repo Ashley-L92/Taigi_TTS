@@ -5,6 +5,9 @@ from gtts import gTTS
 from PIL import Image
 import tempfile
 
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 # 📦 成分小資料庫（可以之後換成 csv）
 ingredient_info = {
     "苯甲酸鈉": {
