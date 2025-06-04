@@ -228,7 +228,6 @@ if uploaded_files:
 
                 if not summary:
                     summary = "這是一項含有多種成分的產品，請依照個人狀況酌量使用。"
-                # ✨ 將 summary 中出現的成分轉換成可點擊的 expander
                 def highlight_ingredients(text, db):
                     for ing in db:
                         if ing in text:
@@ -238,7 +237,6 @@ if uploaded_files:
 
                 highlighted_summary = highlight_ingredients(summary, ingredient_info)
 
-                # 顯示內容（根據模式）
                 st.subheader("📝 成分說明")
                 if mode == "進階模式（完整解讀）":
                     st.markdown(
@@ -275,21 +273,22 @@ if uploaded_files:
                     if st.session_state["yating_tts_count"] >= MAX_TAIWANESE_TTS_PER_SESSION:
                         st.warning("⚠️ 台語語音合成已達本次免費額度上限，請稍後再試或改用中文。")
                     else:
-                        # 1. 先嘗試用「漢字」直接丟給雅婷
-                        yating_url = "https://tts-api.yating.tw/v2/speeches/short"
+                        # ----------- 台語語音新版呼叫 -----------
+                        yating_url = "https://tts.api.yating.tw/v2/speeches/short"
                         yating_headers = {
-                            "Authorization": f"Bearer {YATING_API_KEY}",
+                            "key": YATING_API_KEY,
                             "Content-Type": "application/json"
                         }
                         yating_data = {
                             "input": {"text": summary, "type": "text"},
-                            "voice": {"model": "tai_female_1","speed":0.8, "pitch":1.3,"energy":1.0},
-                            "audioConfig": {"encoding":"LINEAR16","sampleRate":"22K"}
+                            "voice": {"model": "tai_female_1", "speed": 1.0, "pitch": 1.0, "energy": 1.0},
+                            "audioConfig": {"encoding": "LINEAR16", "sampleRate": "16K"}
                         }
-                        tts_resp = requests.post(yating_url, headers=yating_headers, json=yating_data)
-                        if tts_resp.status_code == 200:
-                            audio_bytes = tts_resp.content
-                            audio_type = "mp3"
+                        tts_resp = requests.post(yating_url, headers=yating_headers, json=yating_data, verify=False)
+                        if tts_resp.status_code == 201:
+                            audio_base64 = tts_resp.json()["audioContent"]
+                            audio_bytes = base64.b64decode(audio_base64)
+                            audio_type = "wav"
                             st.session_state["yating_tts_count"] += 1
                         else:
                             # 若出現 400 錯誤才 fallback Gemini POJ
@@ -312,30 +311,34 @@ if uploaded_files:
                                 if trans_resp.status_code == 200:
                                     taigi_text = trans_resp.json()["candidates"][0]["content"]["parts"][0].get("text", "").strip()
                                     yating_data["input"]["text"] = taigi_text
-                                    tts_resp2 = requests.post(yating_url, headers=yating_headers, json=yating_data)
-                                    if tts_resp2.status_code == 200:
-                                        audio_bytes = tts_resp2.content
-                                        audio_type = "mp3"
+                                    tts_resp2 = requests.post(yating_url, headers=yating_headers, json=yating_data, verify=False)
+                                    if tts_resp2.status_code == 201:
+                                        audio_base64 = tts_resp2.json()["audioContent"]
+                                        audio_bytes = base64.b64decode(audio_base64)
+                                        audio_type = "wav"
                                         st.session_state["yating_tts_count"] += 1
                                     else:
-                                        st.error("台語語音產生失敗！")
+                                        st.error(f"台語語音產生失敗！狀態碼：{tts_resp2.status_code}，內容：{tts_resp2.text}")
                                 else:
                                     st.error("Gemini 台語翻譯失敗，無法產生語音。")
                             else:
-                                st.error("台語語音產生失敗！")
-
+                                st.error(f"台語語音產生失敗！狀態碼：{tts_resp.status_code}，內容：{tts_resp.text}")
                 # 播放語音
                 if audio_bytes:
+                    if audio_type == "mp3":
+                        mime = "audio/mpeg"
+                    else:
+                        mime = "audio/wav"
                     audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
                     components.html(f"""
     <audio id="summary-audio" controls>
-        <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mpeg">
+        <source src="data:{mime};base64,{audio_base64}" type="{mime}">
         您的瀏覽器不支援音訊播放，請改用其他裝置或更新瀏覽器。
     </audio>
     <script>
         const audio = document.getElementById("summary-audio");
         audio.onerror = function() {{
-            alert("⚠️ 無法播放語音：您的裝置或瀏覽器可能不支援 MP3 播放。");
+            alert("⚠️ 無法播放語音：您的裝置或瀏覽器可能不支援音訊播放。");
         }};
     </script>
     """, height=80)
@@ -412,7 +415,7 @@ if uploaded_files:
                     img.save(output_path)
                     return output_path
                 image_path = generate_summary_image(plain_summary)
-                st.image(image_path, caption="📸 分享用成分說明卡", use_column_width=True)
+                st.image(image_path, caption="📸 分享用成分說明卡", use_container_width=True)
 
                 with open(image_path, "rb") as file:
                     st.download_button(
