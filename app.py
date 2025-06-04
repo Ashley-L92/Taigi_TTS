@@ -306,13 +306,13 @@ if uploaded_files:
                                     taigi_text = trans_resp.json()["candidates"][0]["content"]["parts"][0].get("text", "").strip()
                                     yating_data["input"]["text"] = taigi_text
                                     # Fallback 也要 verify=False
-                                    tts_resp2 = requests.post(yating_url, headers=yating_headers, json=yating_data, verify=False)
-                                    if tts_resp2.status_code == 200:
-                                        audio_bytes = tts_resp2.content
-                                        audio_type = "mp3"
-                                        st.session_state["yating_tts_count"] += 1
-                                    else:
-                                        st.error("台語語音產生失敗！")
+                                    tts_resp = requests.post(yating_url, headers=yating_headers, json=yating_data, verify=False)
+                                if tts_resp.status_code == 200:
+                                    audio_bytes = tts_resp.content
+                                    audio_type = "mp3"
+                                    st.session_state["yating_tts_count"] += 1
+                                else:
+                                     st.error(f"台語語音產生失敗！狀態碼：{tts_resp.status_code}，內容：{tts_resp.text}")
                                 else:
                                     st.error("Gemini 台語翻譯失敗，無法產生語音。")
                             else:
