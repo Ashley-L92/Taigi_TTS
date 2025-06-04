@@ -1,4 +1,4 @@
-streamlit>=1.23.0
-gtts
-requests
-pillow
+streamlit>=1.32.0
+requests>=2.28.0
+gTTS>=2.3.0
+Pillow>=10.0.0
